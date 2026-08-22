@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+method=${1-}
+[[ $method == layoutColor || $method == layoutFrameColor ]] || exit 2
+if pkill -x hyprpicker 2>/dev/null; then exit; fi
+color=$(hyprpicker -a) || exit 0
+[[ $color =~ ^#[0-9A-Fa-f]{6}$ ]] || exit 1
+omarchy-shell background "$method" "$color"

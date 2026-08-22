@@ -20,13 +20,16 @@ Item {
   property real ambientOpacity: 0.35
   property real ambientBlur: 0.7
   readonly property int topBarHeight: Style.bar.sizeHorizontal
-  readonly property color frameColor: Color.background
-  readonly property color frameBorderColor: Util.alpha(Color.accent, 0.75)
+  readonly property color frameBackgroundColor: Color.background
+  property string frameColorOverride: ""
+  readonly property color frameBorderColor: frameColorOverride || Color.accent
   readonly property bool isFramed: layoutMode === "framed"
   readonly property bool isExtended: layoutMode === "extend"
 
   property string layoutMode: "default"
-  property color extendColor: frameColor
+  property string autoExtendColor: ""
+  property string extendColorOverride: ""
+  readonly property color extendColor: extendColorOverride || autoExtendColor || Color.background
   property string extendColorPath: ""
   property string samplingExtendColorPath: ""
   property string pendingExtendColorPath: ""
@@ -60,24 +63,77 @@ Item {
 
   function loadLayoutState(raw) {
     var mode = "default"
-    try { mode = JSON.parse(String(raw || "")).mode } catch (error) {}
+    var extendColor = ""
+    var frameColor = ""
+    try {
+      var state = JSON.parse(String(raw || ""))
+      mode = state.mode
+      extendColor = normalizedColor(state.extendColor)
+      frameColor = normalizedColor(state.frameColor)
+    } catch (error) {}
+    extendColorOverride = extendColor
+    frameColorOverride = frameColor
     setLayoutMode(mode, false)
+  }
+
+  function normalizedColor(color) {
+    var value = String(color || "").trim().toUpperCase()
+    return /^#[0-9A-F]{6}$/.test(value) ? value : ""
+  }
+
+  function persistLayoutState() {
+    layoutStateFile.setText(JSON.stringify({
+      version: 3,
+      mode: layoutMode,
+      extendColor: extendColorOverride,
+      frameColor: frameColorOverride
+    }, null, 2) + "\n")
   }
 
   function setLayoutMode(mode, persist) {
     var next = normalizedLayoutMode(mode)
     layoutMode = next
-    if (persist)
-      layoutStateFile.setText(JSON.stringify({ version: 1, mode: next }, null, 2) + "\n")
-    if (next === "extend")
+    if (persist) persistLayoutState()
+    if (next === "extend" && !extendColorOverride)
       sampleExtendColor(incomingBackground || displayedBackground || currentBackground)
     return next
   }
 
+  function setExtendColor(color, persist) {
+    var next = normalizedColor(color)
+    if (!next) return "invalid"
+    extendColorOverride = next
+    if (persist) persistLayoutState()
+    return next
+  }
+
+  function useAutoExtendColor(persist) {
+    extendColorOverride = ""
+    if (persist) persistLayoutState()
+    if (layoutMode === "extend")
+      sampleExtendColor(incomingBackground || displayedBackground || currentBackground)
+    return "auto"
+  }
+
+  function setFrameColor(color, persist) {
+    var next = normalizedColor(color)
+    if (!next) return "invalid"
+    frameColorOverride = next
+    if (persist) persistLayoutState()
+    return next
+  }
+
+  function useThemeFrameColor(persist) {
+    frameColorOverride = ""
+    if (persist) persistLayoutState()
+    return "theme"
+  }
+
   function sampleExtendColor(path) {
     path = String(path || "").trim()
-    if (!path || layoutMode !== "extend") return
+    if (!path || layoutMode !== "extend" || extendColorOverride) return
     extendColorPath = path
+    autoExtendColor = ""
     pendingExtendColorPath = path
     if (!edgeColorProc.running) startExtendColorSample()
   }
@@ -197,7 +253,7 @@ Item {
         if (root.layoutMode === "extend"
             && root.samplingExtendColorPath === root.extendColorPath
             && /^#[0-9a-fA-F]{6}$/.test(value))
-          root.extendColor = value
+          root.autoExtendColor = value
       }
     }
     onExited: if (root.pendingExtendColorPath) root.startExtendColorSample()
@@ -246,6 +302,22 @@ Item {
     function layoutStatus(): string {
       return root.layoutMode
     }
+
+    function layoutColor(color: string): string {
+      return root.setExtendColor(color, true)
+    }
+
+    function layoutColorAuto(): string {
+      return root.useAutoExtendColor(true)
+    }
+
+    function layoutFrameColor(color: string): string {
+      return root.setFrameColor(color, true)
+    }
+
+    function layoutFrameColorTheme(): string {
+      return root.useThemeFrameColor(true)
+    }
   }
 
   Timer {
@@ -289,7 +361,7 @@ Item {
         id: remapGuard
         window: panel
       }
-      color: root.isExtended ? root.extendColor : (root.isFramed ? root.frameColor : "transparent")
+      color: root.isExtended ? root.extendColor : (root.isFramed ? root.frameBackgroundColor : "transparent")
       // Keep render updates enabled. The background layer has been observed to
       // lose its committed buffer while parked with updatesEnabled=false,
       // leaving a black desktop until omarchy-shell is restarted. The wallpaper

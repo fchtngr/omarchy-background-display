@@ -2,22 +2,14 @@
   "schemaVersion": 1,
   "id": "thomas.background",
   "name": "Background Layout",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "author": "Thomas",
   "description": "Desktop background renderer with selectable layout modes",
   "kinds": [
-    "service",
-    "bar-widget"
+    "service"
   ],
   "entryPoints": {
-    "service": "Background.qml",
-    "barWidget": "Panel.qml"
-  },
-  "barWidget": {
-    "displayName": "Background",
-    "description": "Choose how the desktop background fits the display",
-    "category": "Display",
-    "allowMultiple": false
+    "service": "Background.qml"
   },
   "omarchy": {
     "clonedFrom": "omarchy.background"

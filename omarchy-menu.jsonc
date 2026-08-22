@@ -1,0 +1,12 @@
+{
+  "style.background-layout": {"icon":"","label":"Background Display","aliases":["background-layout","wallpaper-layout"]},
+  "style.background-layout.default": {"icon":"󰍹","label":"Fill (Default)","checked":"[[ $(omarchy-shell background layoutStatus) == default ]]","action":"omarchy-shell background layout default"},
+  "style.background-layout.framed": {"icon":"󰹑","label":"Framed","checked":"[[ $(omarchy-shell background layoutStatus) == framed ]]","action":"omarchy-shell background layout framed"},
+  "style.background-layout.extend": {"icon":"󰩬","label":"Extend Edges","checked":"[[ $(omarchy-shell background layoutStatus) == extend ]]","action":"omarchy-shell background layout extend"},
+  "style.background-layout.frame-color": {"icon":"󰏘","label":"Frame Color","when":"[[ $(omarchy-shell background layoutStatus) == framed ]]"},
+  "style.background-layout.frame-color.pick": {"icon":"󰃉","label":"Pick From Screen","action":"\"$HOME/.config/omarchy/plugins/thomas.background/pick-color\" layoutFrameColor"},
+  "style.background-layout.frame-color.theme": {"icon":"","label":"Theme Accent","action":"omarchy-shell background layoutFrameColorTheme"},
+  "style.background-layout.extend-color": {"icon":"󰏘","label":"Extend Color","when":"[[ $(omarchy-shell background layoutStatus) == extend ]]"},
+  "style.background-layout.extend-color.pick": {"icon":"󰃉","label":"Pick From Screen","action":"\"$HOME/.config/omarchy/plugins/thomas.background/pick-color\" layoutColor"},
+  "style.background-layout.extend-color.auto": {"icon":"","label":"Auto Detect","action":"omarchy-shell background layoutColorAuto"},
+}

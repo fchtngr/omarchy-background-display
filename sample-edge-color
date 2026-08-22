@@ -8,11 +8,12 @@ sample() {
   # override if mixed-edge wallpapers become a real use case.
   local line
   line=$(magick "$1" -alpha off -colorspace sRGB -resize '64x64!' \
-    \( +clone -gravity north -crop '64x4+0+0' +repage \) \
-    \( +clone -gravity south -crop '64x4+0+0' +repage \) \
-    \( +clone -gravity west -crop '4x64+0+0' +repage -rotate 90 \) \
-    \( +clone -gravity east -crop '4x64+0+0' +repage -rotate 90 \) \
-    -delete 0 -append -colors 8 -format '%c' histogram:info:- |
+    -write mpr:source +delete \
+    \( mpr:source -gravity north -crop '64x4+0+0' +repage \) \
+    \( mpr:source -gravity south -crop '64x4+0+0' +repage \) \
+    \( mpr:source -gravity west -crop '4x64+0+0' +repage -rotate 90 \) \
+    \( mpr:source -gravity east -crop '4x64+0+0' +repage -rotate 90 \) \
+    -append -colors 8 -format '%c' histogram:info:- |
     LC_ALL=C sort -nr | sed -n '1p')
 
   [[ $line =~ \#([0-9A-Fa-f]{6}) ]] || return 1
@@ -25,6 +26,10 @@ if [[ ${1-} == --self-test ]]; then
   magick -size 120x80 xc:'#123456' -fill '#abcdef' \
     -draw 'rectangle 30,20 90,60' "$test_dir/test.png"
   [[ $(sample "$test_dir/test.png") == '#123456' ]]
+  magick -size 64x64 xc:'#123456' -fill '#223344' -draw 'rectangle 0,60 63,63' \
+    -fill '#334455' -draw 'rectangle 0,0 3,63' -fill '#445566' \
+    -draw 'rectangle 60,0 63,63' "$test_dir/mixed.png"
+  [[ $(sample "$test_dir/mixed.png") != '#FFFFFF' ]]
   echo ok
   exit
 fi
