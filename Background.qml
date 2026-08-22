@@ -245,6 +245,16 @@ Item {
     }
   }
 
+  // Read one byte past the limit so oversized state is detected without loading it all.
+  Process {
+    id: layoutStateReadProc
+    running: true
+    command: ["head", "-c", "4097", "--", root.layoutStatePath]
+    stdout: StdioCollector {
+      onStreamFinished: root.loadLayoutState(data.byteLength <= 4096 ? text : "")
+    }
+  }
+
   Process {
     id: edgeColorProc
     stdout: StdioCollector {
@@ -262,12 +272,11 @@ Item {
   FileView {
     id: layoutStateFile
     path: root.layoutStatePath
+    preload: false
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.loadLayoutState(text())
-    onLoadFailed: root.setLayoutMode("default", false)
+    onFileChanged: layoutStateReadProc.running = true
   }
 
   IpcHandler {
