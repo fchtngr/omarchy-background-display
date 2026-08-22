@@ -8,7 +8,27 @@ Choose from three display modes:
 - **Framed** — preserves the image's aspect ratio over a blurred ambient background with a theme-accent frame.
 - **Extend Edges** — preserves the image's aspect ratio and fills the remaining space with a color detected from its outer edge.
 
-[Watch the demo](demo.mp4)
+## Preview
+
+**Menu flow:**
+
+![Choosing a background display mode from the Omarchy menu](demo/demo.gif)
+
+**Framed** — instead of cropping the wallpaper on an ultrawide display:
+
+![Fill (Default) cropping a wallpaper on an ultrawide display](demo/gruvbox_default.jpg)
+
+the full composition is preserved over a blurred background:
+
+![Framed mode preserving the full wallpaper on an ultrawide display](demo/gruvbox_framed.jpg)
+
+**Extend Edges** — instead of cropping a centered design:
+
+![Fill (Default) cropping a centered wallpaper on an ultrawide display](demo/lumon_default.jpg)
+
+the sampled edge color fills the remaining space:
+
+![Extend Edges preserving a centered wallpaper on an ultrawide display](demo/lumon_etend.jpg)
 
 Settings live under **Style → Background Display** in the Omarchy menu. Framed and Extend Edges also offer contextual color controls. **Pick From Screen** uses the same `hyprpicker` tool as `Super+Print`.
 
