@@ -77,7 +77,7 @@ Open **Style → Background Display** and choose a mode. The current mode is mar
 - **Extend Color → Auto Detect** restores automatic edge sampling; when sampling fails, the theme background color is used.
 - **Pick From Screen** starts `hyprpicker`, applies the selected color, and copies it to the clipboard.
 
-Preferences are stored in `~/.local/state/omarchy/background-layout.json`.
+Preferences are stored in the plugin's entry in `~/.config/omarchy/shell.json`.
 
 ## Remove
 
@@ -89,12 +89,6 @@ Restore the stock background service before removing the plugin:
 omarchy plugin disable io.github.fchtngr.background-display
 omarchy plugin enable omarchy.background
 omarchy plugin remove io.github.fchtngr.background-display
-```
-
-The preferences file is intentionally preserved. To remove it too:
-
-```sh
-rm ~/.local/state/omarchy/background-layout.json
 ```
 
 ## Validate

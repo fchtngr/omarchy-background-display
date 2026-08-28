@@ -10,11 +10,10 @@ import qs.Ui
 Item {
   id: root
 
-  readonly property string home: Quickshell.env("HOME")
-  readonly property string stateHome: home + "/.local/state"
-  readonly property string currentBackgroundLink: stateHome + "/omarchy/current/background"
-  readonly property string layoutStatePath: stateHome + "/omarchy/background-layout.json"
+  readonly property string currentBackgroundLink: Quickshell.env("HOME")
+    + "/.local/state/omarchy/current/background"
   property var manifest: null
+  property var shell: null
   property int frameMargin: 24
   property int frameBorderWidth: 3
   property real ambientOpacity: 0.35
@@ -34,7 +33,11 @@ Item {
   property string samplingExtendColorPath: ""
   property string pendingExtendColorPath: ""
 
-  onManifestChanged: if (pendingExtendColorPath && !edgeColorProc.running) startExtendColorSample()
+  onManifestChanged: {
+    if (pendingExtendColorPath && !edgeColorProc.running) startExtendColorSample()
+    loadLayoutSettings()
+  }
+  onShellChanged: loadLayoutSettings()
 
   property string currentBackground: ""
   property string displayedBackground: ""
@@ -61,19 +64,22 @@ Item {
     return mode === "default" || mode === "framed" || mode === "extend"
   }
 
-  function loadLayoutState(raw) {
-    var mode = "default"
-    var extendColor = ""
-    var frameColor = ""
-    try {
-      var state = JSON.parse(String(raw || ""))
-      mode = state.mode
-      extendColor = normalizedColor(state.extendColor)
-      frameColor = normalizedColor(state.frameColor)
-    } catch (error) {}
-    extendColorOverride = extendColor
-    frameColorOverride = frameColor
-    setLayoutMode(mode, false)
+  function storedLayoutSettings() {
+    var id = manifest && manifest.id ? String(manifest.id) : ""
+    if (!id) return {}
+    var entries = shell && shell.shellConfig && Array.isArray(shell.shellConfig.plugins)
+      ? shell.shellConfig.plugins : []
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && String(entries[i].id || "") === id) return entries[i]
+    }
+    return {}
+  }
+
+  function loadLayoutSettings() {
+    var settings = storedLayoutSettings()
+    extendColorOverride = normalizedColor(settings.extendColor)
+    frameColorOverride = normalizedColor(settings.frameColor)
+    setLayoutMode(settings.mode, false)
   }
 
   function normalizedColor(color) {
@@ -81,19 +87,21 @@ Item {
     return /^#[0-9A-F]{6}$/.test(value) ? value : ""
   }
 
-  function persistLayoutState() {
-    layoutStateFile.setText(JSON.stringify({
-      version: 3,
-      mode: layoutMode,
-      extendColor: extendColorOverride,
-      frameColor: frameColorOverride
-    }, null, 2) + "\n")
+  function persistLayoutSettings() {
+    if (!shell || !manifest || !manifest.id) return
+    var settings = { id: String(manifest.id) }
+    var stored = storedLayoutSettings()
+    for (var key in stored) if (key !== "id") settings[key] = stored[key]
+    settings.mode = layoutMode
+    settings.extendColor = extendColorOverride
+    settings.frameColor = frameColorOverride
+    shell.updateEntryInline(manifest.id, settings)
   }
 
   function setLayoutMode(mode, persist) {
     var next = normalizedLayoutMode(mode)
     layoutMode = next
-    if (persist) persistLayoutState()
+    if (persist) persistLayoutSettings()
     if (next === "extend" && !extendColorOverride)
       sampleExtendColor(incomingBackground || displayedBackground || currentBackground)
     return next
@@ -103,13 +111,13 @@ Item {
     var next = normalizedColor(color)
     if (!next) return "invalid"
     extendColorOverride = next
-    if (persist) persistLayoutState()
+    if (persist) persistLayoutSettings()
     return next
   }
 
   function useAutoExtendColor(persist) {
     extendColorOverride = ""
-    if (persist) persistLayoutState()
+    if (persist) persistLayoutSettings()
     if (layoutMode === "extend")
       sampleExtendColor(incomingBackground || displayedBackground || currentBackground)
     return "auto"
@@ -119,13 +127,13 @@ Item {
     var next = normalizedColor(color)
     if (!next) return "invalid"
     frameColorOverride = next
-    if (persist) persistLayoutState()
+    if (persist) persistLayoutSettings()
     return next
   }
 
   function useThemeFrameColor(persist) {
     frameColorOverride = ""
-    if (persist) persistLayoutState()
+    if (persist) persistLayoutSettings()
     return "theme"
   }
 
@@ -259,15 +267,11 @@ Item {
     onExited: if (root.pendingExtendColorPath) root.startExtendColorSample()
   }
 
-  FileView {
-    id: layoutStateFile
-    path: root.layoutStatePath
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.loadLayoutState(text())
-    onLoadFailed: root.setLayoutMode("default", false)
+  Connections {
+    target: root.shell
+    function onShellConfigChanged() {
+      root.loadLayoutSettings()
+    }
   }
 
   IpcHandler {
@@ -344,7 +348,10 @@ Item {
     }
   }
 
-  Component.onCompleted: refreshBackground()
+  Component.onCompleted: {
+    refreshBackground()
+    loadLayoutSettings()
+  }
 
   Variants {
     model: Quickshell.screens
