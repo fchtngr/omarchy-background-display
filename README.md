@@ -36,6 +36,7 @@ Settings live under **Style → Background Display** in the Omarchy menu. Framed
 
 - Omarchy 4 / Quattro
 - ImageMagick (`magick`) for automatic edge-color detection
+- Perl for bounded, no-follow wallpaper reads
 - `hyprpicker` and `wl-clipboard` for picking a custom color from the screen
 
 These are included with a standard Omarchy installation. The plugin runs inside `omarchy-shell` with normal user permissions; it uses no network access or privilege escalation.

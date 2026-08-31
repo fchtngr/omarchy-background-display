@@ -2,19 +2,53 @@
 set -euo pipefail
 
 sample() {
-  [[ -f $1 ]] || return 1
+  local input=$1
+  local snapshot
+  local line
+
+  snapshot=$(mktemp) || return 1
+  if ! perl - "$input" >"$snapshot" <<'PERL'
+use Fcntl qw(O_RDONLY O_NONBLOCK O_NOFOLLOW);
+use File::Spec::Functions qw(rel2abs);
+
+my $path = rel2abs($ARGV[0]);
+sysopen(my $file, $path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW) or exit 1;
+my @stat = stat($file);
+exit 1 unless @stat && (($stat[2] & 0170000) == 0100000);
+
+my $limit = 16 * 1024 * 1024;
+my ($total, $buffer) = (0, '');
+while (1) {
+    my $read = sysread($file, $buffer, 64 * 1024);
+    exit 1 unless defined $read;
+    last if $read == 0;
+    $total += $read;
+    exit 1 if $total > $limit;
+    print $buffer or exit 1;
+}
+PERL
+  then
+    rm -f "$snapshot"
+    return 1
+  fi
 
   # ponytail: dominant quantized perimeter is a heuristic; add a manual color
   # override if mixed-edge wallpapers become a real use case.
-  local line
-  line=$(magick "$1" -alpha off -colorspace sRGB -resize '64x64!' \
+  if ! line=$(timeout --kill-after=1s 5s magick \
+    -limit memory 128MiB -limit map 256MiB -limit area 64MP \
+    -limit width 16384 -limit height 16384 \
+    "$snapshot" -alpha off -colorspace sRGB -resize '64x64!' \
     -write mpr:source +delete \
     \( mpr:source -gravity north -crop '64x4+0+0' +repage \) \
     \( mpr:source -gravity south -crop '64x4+0+0' +repage \) \
     \( mpr:source -gravity west -crop '4x64+0+0' +repage -rotate 90 \) \
     \( mpr:source -gravity east -crop '4x64+0+0' +repage -rotate 90 \) \
     -append -colors 8 -format '%c' histogram:info:- |
-    LC_ALL=C sort -nr | sed -n '1p')
+    LC_ALL=C sort -nr | sed -n '1p'); then
+    rm -f "$snapshot"
+    return 1
+  fi
+  rm -f "$snapshot"
 
   [[ $line =~ \#([0-9A-Fa-f]{6}) ]] || return 1
   printf '#%s\n' "${BASH_REMATCH[1]}"
