@@ -5,7 +5,7 @@
   "version": "2.0.0",
   "author": "Thomas Feichtinger",
   "license": "MIT",
-  "description": "Fill, frame, or color-extend Omarchy desktop backgrounds per display, and cycle through them on a schedule, from a bar panel",
+  "description": "Fill or fit Omarchy desktop backgrounds per display, with background, frame, spacing, and scheduled cycling options",
   "kinds": [
     "service",
     "bar-widget"
@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "Background",
-    "description": "Background preset per display, its colors, and cycling.",
+    "description": "Image fit, background, frame, spacing per display, and cycling.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

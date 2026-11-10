@@ -9,11 +9,8 @@ import qs.Commons as Commons
 import qs.Ui
 import "Layout.js" as Layout
 
-// Omarchy's background service, with presets: fill (the stock crop), framed
-// (the whole image over a blurred copy, in a frame clear of the bar) and
-// extend (the whole image over its edge colour), chosen per display. It also
-// moves on to another background on a schedule. The bar panel edits the
-// settings file; this follows it.
+// Omarchy's background service with per-display Fill / Fit, independent
+// background treatment, frame, spacing, and scheduled cycling.
 Item {
   id: root
 
@@ -58,18 +55,11 @@ Item {
     ? String(shell.barConfig.position) : "top"
   readonly property int barSize: barEdge === "left" || barEdge === "right"
     ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
-  readonly property bool anyExtended: {
-    if (settings.preset === "extend") return true
-    for (var name in settings.displays) if (settings.displays[name] === "extend") return true
-    return false
-  }
+  readonly property bool needsImageColor: Layout.needsImageColor(settings)
 
-  // The edge colour of each background extend has needed, sampled once.
+  // The sampled edge colour of each background, shared by all displays.
   property var edgeColors: ({})
   property var edgeQueue: []
-  readonly property color extendColor: settings.edgeColor
-    || edgeColors[displayedBackground] || Commons.Color.background
-  readonly property color frameColor: settings.frameColor || Commons.Color.accent
 
   // When the current background was set: the link's own mtime, which every
   // way of setting one (picker, next, theme switch, cycling) renews. Cycling
@@ -248,7 +238,7 @@ Item {
   }
 
   function sampleEdgeColor(path) {
-    if (!anyExtended || settings.edgeColor || !path || isVideo(path)) return
+    if (!needsImageColor || !path || isVideo(path)) return
     if (edgeColors[path] !== undefined || edgeQueue.indexOf(path) !== -1) return
     edgeQueue = edgeQueue.concat([path])
     probeNextEdge()
@@ -274,7 +264,7 @@ Item {
   }
 
   onDisplayedBackgroundChanged: sampleEdgeColor(displayedBackground)
-  onAnyExtendedChanged: sampleEdgeColor(displayedBackground)
+  onNeedsImageColorChanged: sampleEdgeColor(displayedBackground)
   onNextChangeAtChanged: scheduleCycle()
   onManifestChanged: probeNextEdge()
 
@@ -488,11 +478,15 @@ Item {
         id: remapGuard
         window: panel
       }
-      // Videos are OWE's, drawn edge to edge; presets apply to stills.
-      readonly property string preset: root.isVideo(root.displayedBackground)
-        ? "fill" : Layout.presetFor(root.settings, modelData.name)
-      color: preset === "framed" ? Commons.Color.background
-        : preset === "extend" ? root.extendColor : "transparent"
+      // Videos are OWE's, drawn edge to edge; appearance applies to stills.
+      readonly property var appearance: Layout.appearanceFor(root.settings, modelData.name)
+      readonly property bool fitted: !root.isVideo(root.displayedBackground) && appearance.mode === "fit"
+      readonly property bool framed: fitted && appearance.frame
+      readonly property color frameColor: appearance.frameColor || Commons.Color.accent
+      color: !fitted ? "transparent" : appearance.background === "image"
+        ? (root.edgeColors[root.displayedBackground] || Commons.Color.background)
+        : appearance.background === "color" ? (appearance.backgroundColor || Commons.Color.background)
+        : Commons.Color.background
       // Keep render updates enabled. The background layer has been observed to
       // lose its committed buffer while parked with updatesEnabled=false,
       // leaving a black desktop until omarchy-shell is restarted. A still
@@ -519,12 +513,12 @@ Item {
       // is decoded at its own size rather than scaled up to cover the screen.
       readonly property bool sized: width > 0 && height > 0
 
-      // Where the preset puts `path`, in this window's coordinates. A whole
+      // Where the appearance puts `path`, in this window's coordinates. A whole
       // image takes the rectangle of its own shape, so the crop below draws
       // it uncut.
       function placement(path) {
         var native = root.nativeSizes[path]
-        return Layout.placement(preset, width, height,
+        return Layout.placement(root.isVideo(root.displayedBackground) ? Layout.appearance({}) : appearance, width, height,
           native ? native.width : 0, native ? native.height : 0, root.barEdge, root.barSize)
       }
 
@@ -556,11 +550,11 @@ Item {
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
       exclusionMode: ExclusionMode.Ignore
 
-      // Framed sits over a quiet, blurred copy of the wallpaper. Blur hides
+      // Fit can sit over a quiet, blurred copy of the wallpaper. Blur hides
       // detail, so a small decode is enough.
       Item {
         anchors.fill: parent
-        visible: panel.preset === "framed" && root.displayedBackground !== ""
+        visible: panel.fitted && panel.appearance.background === "blur" && root.displayedBackground !== ""
         opacity: 0.35
         layer.enabled: visible
         layer.smooth: true
@@ -607,9 +601,19 @@ Item {
         }
       }
 
+      // Rounding the fitted rectangle can change its aspect by a fraction
+      // of a pixel. PreserveAspectFit keeps even the outermost pixels visible.
+      Binding {
+        target: base.current
+        property: "fillMode"
+        value: panel.fitted ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+        when: base.current !== null
+      }
+
       Frame {
         target: base
-        visible: panel.preset === "framed" && base.ready
+        frameColor: panel.frameColor
+        visible: panel.framed && base.ready
       }
 
       Image {
@@ -620,7 +624,7 @@ Item {
         source: decode.width > 0 ? root.imageUrl(root.oldBackground) : ""
         sourceSize.width: decode.width
         sourceSize.height: decode.height
-        fillMode: Image.PreserveAspectCrop
+        fillMode: panel.fitted ? Image.PreserveAspectFit : Image.PreserveAspectCrop
         asynchronous: true
         cache: false
         smooth: true
@@ -631,7 +635,8 @@ Item {
 
       Frame {
         target: oldFrame
-        visible: panel.preset === "framed" && oldFrame.visible && oldFrame.status === Image.Ready
+        frameColor: panel.frameColor
+        visible: panel.framed && oldFrame.visible && oldFrame.status === Image.Ready
       }
 
       Item {
@@ -658,7 +663,7 @@ Item {
           source: decode.width > 0 ? root.imageUrl(framePath) : ""
           sourceSize.width: decode.width
           sourceSize.height: decode.height
-          fillMode: Image.PreserveAspectCrop
+          fillMode: panel.fitted ? Image.PreserveAspectFit : Image.PreserveAspectCrop
           asynchronous: true
           cache: false
           smooth: true
@@ -668,7 +673,8 @@ Item {
 
         Frame {
           target: incomingFrame
-          visible: panel.preset === "framed" && incomingFrame.status === Image.Ready
+          frameColor: panel.frameColor
+          visible: panel.framed && incomingFrame.status === Image.Ready
         }
       }
 
@@ -720,15 +726,16 @@ Item {
     }
   }
 
-  // The frame drawn around a framed image.
+  // The optional frame, independent of spacing and background treatment.
   component Frame: Rectangle {
     required property Item target
+    required property color frameColor
     x: target.x - Layout.FRAME_BORDER
     y: target.y - Layout.FRAME_BORDER
     width: target.width + 2 * Layout.FRAME_BORDER
     height: target.height + 2 * Layout.FRAME_BORDER
     color: "transparent"
-    border.color: root.frameColor
+    border.color: frameColor
     border.width: Layout.FRAME_BORDER
   }
 }
