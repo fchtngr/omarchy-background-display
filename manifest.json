@@ -2,14 +2,26 @@
   "schemaVersion": 1,
   "id": "io.github.fchtngr.background-display",
   "name": "Background Display",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "author": "Thomas Feichtinger",
   "license": "MIT",
-  "description": "Fill, frame, or color-extend Omarchy desktop backgrounds",
+  "description": "Fill, frame, or color-extend Omarchy desktop backgrounds per display, and cycle through them on a schedule, from a bar panel",
   "kinds": [
-    "service"
+    "service",
+    "bar-widget"
   ],
   "entryPoints": {
-    "service": "Background.qml"
+    "service": "Background.qml",
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Background",
+    "description": "Background preset per display, its colors, and cycling.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.background"
   }
 }
