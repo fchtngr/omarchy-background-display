@@ -7,7 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import "Layout.js" as Layout
 
-// The bar icon and its panel: which preset each display uses, its colours,
+// The bar icon and its panel: image fit and appearance for each display,
 // and cycling through the theme's backgrounds. Everything is written to the
 // settings file, which the background service follows.
 Panel {
@@ -35,7 +35,7 @@ Panel {
   readonly property bool multipleDisplays: Quickshell.screens.length > 1
   property string target: ""
   readonly property string editedDisplay: multipleDisplays ? target : ""
-  readonly property string shownPreset: Layout.presetFor(config, editedDisplay || barScreen)
+  readonly property var shownAppearance: Layout.appearanceFor(config, editedDisplay || barScreen)
 
   property string currentBackground: ""
   property real changedAt: 0
@@ -46,19 +46,21 @@ Panel {
 
   property string sampledFor: ""
   property string sampledEdge: ""
-  readonly property color extendColor: config.edgeColor
-    || (sampledFor === currentBackground && sampledEdge) || Commons.Color.background
-  readonly property color frameColor: config.frameColor || Commons.Color.accent
+  readonly property color imageColor: (sampledFor === currentBackground && sampledEdge) || Commons.Color.background
 
   // The interval cycling comes back on with.
   property int lastHours: 4
   onConfigChanged: if (config.cycleHours > 0) lastHours = config.cycleHours
 
-  // Which colour the picker is choosing: "frameColor" or "edgeColor".
+  // Which appearance colour the picker is choosing.
   property string picking: ""
+  property string pickingDisplay: ""
+  property var pickingAppearance: ({})
 
-  function setPreset(preset) {
-    store.save(Layout.withPreset(config, editedDisplay, preset))
+  function setAppearance(patch) {
+    var options = Layout.appearance(shownAppearance)
+    for (var key in patch) options[key] = patch[key]
+    store.save(Layout.withAppearance(config, editedDisplay, options))
   }
 
   function setCycle(on) {
@@ -67,6 +69,8 @@ Panel {
 
   function pickColor(key) {
     picking = key
+    pickingDisplay = editedDisplay
+    pickingAppearance = Layout.appearance(shownAppearance)
     close()
     if (!picker.running) picker.running = true
   }
@@ -82,7 +86,7 @@ Panel {
   }
 
   function sampleEdge() {
-    if (shownPreset !== "extend" || config.edgeColor || video) return
+    if (!Layout.needsImageColor(config) || video) return
     if (!currentBackground || sampledFor === currentBackground || edgeProbe.running) return
     edgeProbe.path = currentBackground
     edgeProbe.running = true
@@ -92,7 +96,7 @@ Panel {
     target = multipleDisplays ? barScreen : ""
     refresh()
   }
-  onShownPresetChanged: sampleEdge()
+  onShownAppearanceChanged: sampleEdge()
   onCurrentBackgroundChanged: sampleEdge()
 
   SettingsStore {
@@ -142,9 +146,9 @@ Panel {
     onExited: function(exitCode) {
       var value = String(pickerOut.text || "").trim()
       if (exitCode === 0 && /^#[0-9A-Fa-f]{6}$/.test(value) && root.picking) {
-        var patch = {}
+        var patch = Layout.appearance(root.pickingAppearance)
         patch[root.picking] = value
-        store.update(patch)
+        store.save(Layout.withAppearance(root.config, root.pickingDisplay, patch))
       }
       root.picking = ""
     }
@@ -158,7 +162,7 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     tooltipText: {
-      var preset = Layout.presetFor(root.config, root.barScreen)
+      var preset = Layout.appearanceFor(root.config, root.barScreen).mode
       var text = "Background · " + preset.charAt(0).toUpperCase() + preset.slice(1)
       if (root.multipleDisplays && root.barScreen) text += " on " + root.barScreen
       if (root.nextIn) text += " · next in " + root.nextIn
@@ -166,7 +170,7 @@ Panel {
     }
     iconComponent: Component {
       PresetGlyph {
-        preset: Layout.presetFor(root.config, root.barScreen)
+        preset: Layout.appearanceFor(root.config, root.barScreen).mode
         cycling: root.config.cycleHours > 0
         color: button.foreground
       }
@@ -283,11 +287,11 @@ Panel {
             }
           }
 
-          // ---------- Presets ----------
+          // ---------- Image fit and independent appearance options ----------
           PanelSeparator { foreground: root.foreground }
 
           PanelSectionHeader {
-            text: "Preset"
+            text: "Image fit"
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
@@ -296,15 +300,13 @@ Panel {
             id: presets
             width: parent.width
             spacing: Style.spacing.xs
-            readonly property real cardWidth: (width - 2 * spacing) / 3
+            readonly property real cardWidth: (width - spacing) / 2
 
             Repeater {
               model: [
-                { id: "fill", label: "Fill", hint: "crop" },
-                { id: "framed", label: "Framed", hint: "blur + frame" },
-                { id: "extend", label: "Extend", hint: "edge color" }
+                { id: "fill", label: "Fill", hint: "crop to screen" },
+                { id: "fit", label: "Fit", hint: "whole image" }
               ]
-
               PresetCard {
                 required property var modelData
                 width: presets.cardWidth
@@ -315,49 +317,96 @@ Panel {
             }
           }
 
-          Row {
-            visible: root.shownPreset !== "fill"
-            spacing: Style.spacing.xs
-            readonly property string key: root.shownPreset === "framed" ? "frameColor" : "edgeColor"
+          Column {
+            visible: root.shownAppearance.mode === "fit"
+            width: parent.width
+            spacing: Style.space(12)
 
-            Rectangle {
-              width: Style.space(14)
-              height: width
-              color: root.shownPreset === "framed" ? root.frameColor : root.extendColor
-              border.color: Util.alpha(root.foreground, 0.4)
-              border.width: 1
-              anchors.verticalCenter: parent.verticalCenter
-            }
-            PanelText {
-              text: root.shownPreset === "framed" ? "Frame" : "Edge"
-              color: root.dim
-              font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
-              leftPadding: Style.space(2)
-              rightPadding: Style.space(6)
-            }
-            Button {
-              text: root.shownPreset === "framed" ? "Theme accent" : "From the image"
-              active: !root.config[parent.key]
-              bordered: true
-              fontSize: Style.font.caption
+            PanelSectionHeader {
+              text: "Background"
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: {
-                var patch = {}
-                patch[parent.key] = ""
-                store.update(patch)
+            }
+
+            Row {
+              spacing: Style.spacing.xs
+              Repeater {
+                model: [
+                  { id: "blur", label: "Blur" },
+                  { id: "image", label: "Image color" },
+                  { id: "color", label: "Custom color" }
+                ]
+                Button {
+                  required property var modelData
+                  text: modelData.label
+                  active: root.shownAppearance.background === modelData.id
+                  bordered: true
+                  fontSize: Style.font.caption
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onClicked: root.setAppearance({ background: modelData.id })
+                }
               }
             }
-            Button {
-              text: "Pick from screen"
-              iconText: "󰈊"
-              active: !!root.config[parent.key]
-              bordered: true
-              fontSize: Style.font.caption
+
+            ColorControls {
+              visible: root.shownAppearance.background === "color"
+              colorKey: "backgroundColor"
+              fallbackLabel: "Theme background"
+              fallbackColor: Commons.Color.background
+            }
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(frameLabel.implicitHeight, frameSwitch.implicitHeight)
+              PanelText {
+                id: frameLabel
+                text: "Frame"
+                font.pixelSize: Style.font.body
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              ToggleSwitch {
+                id: frameSwitch
+                checked: root.shownAppearance.frame
+                foreground: root.foreground
+                anchors.right: parent.right
+                onToggled: root.setAppearance({ frame: !checked })
+              }
+            }
+
+            ColorControls {
+              visible: root.shownAppearance.frame
+              colorKey: "frameColor"
+              fallbackLabel: "Theme accent"
+              fallbackColor: Commons.Color.accent
+            }
+
+            NumberField {
+              label: "Spacing (px)"
+              from: 0
+              to: Layout.MAX_SPACING
+              value: root.shownAppearance.spacing
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: root.pickColor(parent.key)
+              onModified: function(v) { root.setAppearance({ spacing: v }) }
+            }
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(barLabel.implicitHeight, barSwitch.implicitHeight)
+              PanelText {
+                id: barLabel
+                text: "Keep clear of bar"
+                font.pixelSize: Style.font.body
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              ToggleSwitch {
+                id: barSwitch
+                checked: root.shownAppearance.avoidBar
+                foreground: root.foreground
+                anchors.right: parent.right
+                onToggled: root.setAppearance({ avoidBar: !checked })
+              }
             }
           }
 
@@ -474,8 +523,47 @@ Panel {
     font.family: root.fontFamily
   }
 
-  // The displays laid out as they are arranged, each drawn with its preset.
-  // Clicking one makes it the display the presets apply to.
+  component ColorControls: Row {
+    required property string colorKey
+    required property string fallbackLabel
+    required property color fallbackColor
+    spacing: Style.spacing.xs
+
+    Rectangle {
+      width: Style.space(14)
+      height: width
+      color: root.shownAppearance[parent.colorKey] || parent.fallbackColor
+      border.color: Util.alpha(root.foreground, 0.4)
+      border.width: 1
+      anchors.verticalCenter: parent.verticalCenter
+    }
+    Button {
+      text: parent.fallbackLabel
+      active: !root.shownAppearance[parent.colorKey]
+      bordered: true
+      fontSize: Style.font.caption
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      onClicked: {
+        var patch = {}
+        patch[parent.colorKey] = ""
+        root.setAppearance(patch)
+      }
+    }
+    Button {
+      text: "Pick from screen"
+      iconText: "󰈊"
+      active: !!root.shownAppearance[parent.colorKey]
+      bordered: true
+      fontSize: Style.font.caption
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      onClicked: root.pickColor(parent.colorKey)
+    }
+  }
+
+  // The displays laid out as they are arranged, each with its own appearance.
+  // Clicking one selects it for editing.
   component DisplayMap: Item {
     id: map
 
@@ -509,12 +597,11 @@ Panel {
         Thumb {
           anchors.fill: parent
           path: root.video ? "" : root.currentBackground
-          preset: Layout.presetFor(root.config, tile.name)
+          appearance: Layout.appearanceFor(root.config, tile.name)
           ratio: width / tile.modelData.width
           barEdge: root.barEdge
           barSize: root.barSize
-          frameColor: root.frameColor
-          extendColor: root.extendColor
+          imageColor: root.imageColor
         }
 
         Rectangle {
@@ -554,7 +641,7 @@ Panel {
     property string preset
     property string label
     property string hint
-    readonly property bool active: root.shownPreset === preset
+    readonly property bool active: root.shownAppearance.mode === preset
 
     implicitHeight: cardColumn.implicitHeight + 2 * Style.space(6)
     color: active ? Style.selectedFillFor(root.foreground, Commons.Color.accent)
@@ -578,12 +665,15 @@ Panel {
         width: parent.width
         height: display ? Math.round(width * display.height / display.width) : Math.round(width * 9 / 16)
         path: root.video ? "" : root.currentBackground
-        preset: card.preset
+        appearance: {
+          var options = Layout.appearance(root.shownAppearance)
+          options.mode = card.preset
+          return options
+        }
         ratio: display ? width / display.width : 1
         barEdge: root.barEdge
         barSize: root.barSize
-        frameColor: root.frameColor
-        extendColor: root.extendColor
+        imageColor: root.imageColor
       }
 
       Item {
@@ -617,7 +707,7 @@ Panel {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onClicked: root.setPreset(card.preset)
+      onClicked: root.setAppearance({ mode: card.preset })
     }
   }
 
@@ -640,23 +730,11 @@ Panel {
       border.width: Math.max(1, Math.round(glyph.unit * 1.3))
     }
     Rectangle {
-      readonly property real inset: glyph.preset === "fill" ? 2.5 : glyph.preset === "framed" ? 3.5 : 0
-      x: screenOutline.x + glyph.unit * (glyph.preset === "extend" ? 4 : inset)
-      y: screenOutline.y + glyph.unit * (glyph.preset === "extend" ? 1.5 : glyph.preset === "framed" ? 2.5 : 2.5)
-      width: screenOutline.width - glyph.unit * 2 * (glyph.preset === "extend" ? 4 : inset)
-      height: screenOutline.height - glyph.unit * 2 * (glyph.preset === "extend" ? 1.5 : 2.5)
+      x: screenOutline.x + glyph.unit * (glyph.preset === "fit" ? 4 : 2.5)
+      y: screenOutline.y + glyph.unit * (glyph.preset === "fit" ? 1.5 : 2.5)
+      width: screenOutline.width - glyph.unit * (glyph.preset === "fit" ? 8 : 5)
+      height: screenOutline.height - glyph.unit * (glyph.preset === "fit" ? 3 : 5)
       color: glyph.color
-    }
-    Repeater {
-      model: glyph.preset === "extend" ? [1.5, 10.5] : []
-      Rectangle {
-        required property real modelData
-        x: screenOutline.x + glyph.unit * modelData
-        y: screenOutline.y + glyph.unit * 1.5
-        width: glyph.unit * 2; height: screenOutline.height - glyph.unit * 3
-        color: glyph.color
-        opacity: 0.4
-      }
     }
     Rectangle {
       visible: glyph.cycling

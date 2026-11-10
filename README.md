@@ -4,18 +4,20 @@ Omarchy's default fill mode works well for most displays, but on ultrawide monit
 
 Everything lives in a bar icon and its panel; there are no menu entries and no separate app.
 
-- **Presets, per display** — Fill (Omarchy's standard crop), Framed (the whole image over a blurred copy, in a theme-accent frame clear of the bar) or Extend (the whole image over the color of its edges). Pick one for the display you are on, or for all of them.
-- **Real previews** — the panel draws your current background the way each preset and each display shows it.
-- **Colors** — the frame follows the theme accent and the extend color is sampled from the image, or pick either from the screen.
+- **Fill / Fit, per display** — Fill crops to cover the screen; Fit shows the whole image.
+- **Background** — fill the space around a fitted image with a blurred copy, its sampled edge color, or a custom color picked from the screen.
+- **Optional frame** — add a border in the theme accent or a color picked from the screen.
+- **Independent spacing** — set the image's inset in logical pixels, and separately choose whether it keeps clear of the bar. Neither requires a frame.
+- **Real previews** — the panel draws your current background with each display's settings.
 - **Cycling** — move on to the next background every few hours, in Omarchy's order or shuffled, counted from the last time it changed. Right-click the icon for the next one now.
 
 ## The panel
 
-![The Background panel open from the bar: the current background framed on the display, the three presets, the frame color, and cycling every 3 hours](demo/panel.png)
+![The Background panel open from the bar: the current background framed on the display, image fit and appearance options, and cycling every 3 hours](demo/panel.png)
 
 ## Preview
 
-**Framed** — instead of cropping the wallpaper on an ultrawide display:
+**Fit with Blur and Frame** — instead of cropping the wallpaper on an ultrawide display:
 
 ![Fill (Default) cropping a wallpaper on an ultrawide display](demo/gruvbox_default.jpg)
 
@@ -23,7 +25,7 @@ the full composition is preserved over a blurred background:
 
 ![Framed mode preserving the full wallpaper on an ultrawide display](demo/gruvbox_framed.jpg)
 
-**Extend Edges** — instead of cropping a centered design:
+**Fit with Image color** — instead of cropping a centered design:
 
 ![Fill (Default) cropping a centered wallpaper on an ultrawide display](demo/lumon_default.jpg)
 
@@ -55,16 +57,36 @@ The panel writes `~/.config/omarchy/background-display.json`, and the background
 
 ```json
 {
-  "preset": "fill",
-  "displays": { "DP-3": "framed" },
+  "mode": "fill",
+  "background": "blur",
+  "frame": false,
+  "spacing": 0,
+  "avoidBar": false,
   "frameColor": "",
-  "edgeColor": "",
+  "backgroundColor": "",
+  "displays": {
+    "DP-3": {
+      "mode": "fit",
+      "background": "image",
+      "frame": false,
+      "spacing": 24,
+      "avoidBar": true,
+      "frameColor": "",
+      "backgroundColor": ""
+    }
+  },
   "cycleHours": 4,
   "shuffle": false
 }
 ```
 
-`preset` is every display's; `displays` holds those with their own. Empty colors follow the theme accent and the image's edge. `cycleHours` 0 turns cycling off.
+Top-level appearance options apply to every display; `displays` holds complete appearances for displays with their own settings. Choosing an option for **All displays** applies the panel's shown appearance to all displays and clears their overrides. Cycling is shared.
+
+`mode` is `fill` or `fit`. Fit's `background` is `blur`, `image` (sampled edge color), or `color` (custom color). Empty `frameColor` and `backgroundColor` follow the theme accent and theme background respectively. `frame` enables a 3 px border. `spacing` (0–256 logical px) insets the image from the screen edges; a frame always has at least enough room to remain visible. `avoidBar` reserves the bar's space independently. Fill ignores these options but remembers them when returning to Fit. Videos continue to use Omarchy's video background rendering. `cycleHours` 0 turns cycling off.
+
+Old `framed` and `extend` presets, including per-display choices and custom colors, are read automatically and saved in the new format on the next edit. Framed becomes Fit + Blur + Frame with 24 px spacing and bar clearance. Extend becomes Fit + Image color, or Custom color if an edge color was set.
+
+The preview images above show the equivalent appearances from the previous panel.
 
 ## Remove
 
